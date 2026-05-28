@@ -54,4 +54,24 @@ export const dashboardApi = {
   get: () => api.get("/dashboard").then((r) => r.data),
 };
 
+export const seasonsApi = {
+  list: (params) => api.get("/seasons/", { params }).then((r) => r.data),
+  create: (data) => api.post("/seasons/", data).then((r) => r.data),
+  update: (id, data) => api.put(`/seasons/${id}`, data).then((r) => r.data),
+  delete: (id) => api.delete(`/seasons/${id}`),
+};
+
+export const discountsApi = {
+  list: () => api.get("/discounts/").then((r) => r.data),
+  create: (data) => api.post("/discounts/", data).then((r) => r.data),
+  update: (id, data) => api.put(`/discounts/${id}`, data).then((r) => r.data),
+  delete: (id) => api.delete(`/discounts/${id}`),
+  validate: (code, amount) =>
+    api.get(`/discounts/validate/${code}`, { params: { base_amount: amount } }).then((r) => r.data),
+};
+
+export const pricingApi = {
+  preview: (data) => api.post("/bookings/price-preview", data).then((r) => r.data),
+};
+
 export { api };

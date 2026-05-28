@@ -10,6 +10,8 @@ from models import Base, Venue, Client, Booking
 from schemas import DashboardStats
 from routers import venues, clients, bookings
 from routers.auth_router import router as auth_router
+from routers.seasons import router as seasons_router
+from routers.discounts import router as discounts_router
 from auth import get_current_user
 
 Base.metadata.create_all(bind=engine)
@@ -31,6 +33,8 @@ app.include_router(auth_router)
 app.include_router(venues.router)
 app.include_router(clients.router)
 app.include_router(bookings.router)
+app.include_router(seasons_router)
+app.include_router(discounts_router)
 
 
 @app.get("/dashboard", response_model=DashboardStats)

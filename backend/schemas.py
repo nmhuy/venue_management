@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
 
@@ -85,7 +85,61 @@ class ClientOut(ClientBase):
         from_attributes = True
 
 
-class BookingBase(BaseModel):
+class BookingVenueOut(BaseModel):
+    id: int
+    venue_id: int
+    venue: Optional[VenueOut] = None
+    price_per_day: float
+    days: int
+    seasonal_multiplier: float
+    season_name: Optional[str] = None
+    subtotal: float
+
+    class Config:
+        from_attributes = True
+
+
+class DiscountShortOut(BaseModel):
+    id: int
+    name: str
+    code: str
+    discount_type: str
+    value: float
+
+    class Config:
+        from_attributes = True
+
+
+class BookingOut(BaseModel):
+    id: int
+    venue_id: Optional[int] = None
+    client_id: int
+    event_type: str
+    event_name: Optional[str] = None
+    start_date: datetime
+    end_date: datetime
+    guest_count: int
+    status: str
+    base_price: Optional[float] = None
+    discount_id: Optional[int] = None
+    discount_amount: float = 0
+    total_price: Optional[float] = None
+    deposit_paid: bool = False
+    deposit_amount: float = 0
+    notes: Optional[str] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    venue: Optional[VenueOut] = None
+    client: Optional[ClientOut] = None
+    discount: Optional[DiscountShortOut] = None
+    booking_venues: List[BookingVenueOut] = []
+
+    class Config:
+        from_attributes = True
+
+
+# Legacy — kept so old routers that import BookingCreate/BookingUpdate still compile
+class BookingCreate(BaseModel):
     venue_id: int
     client_id: int
     event_type: str
@@ -100,10 +154,6 @@ class BookingBase(BaseModel):
     notes: Optional[str] = None
 
 
-class BookingCreate(BookingBase):
-    pass
-
-
 class BookingUpdate(BaseModel):
     event_type: Optional[str] = None
     event_name: Optional[str] = None
@@ -115,17 +165,6 @@ class BookingUpdate(BaseModel):
     deposit_paid: Optional[bool] = None
     deposit_amount: Optional[float] = None
     notes: Optional[str] = None
-
-
-class BookingOut(BookingBase):
-    id: int
-    created_at: datetime
-    updated_at: Optional[datetime] = None
-    venue: Optional[VenueOut] = None
-    client: Optional[ClientOut] = None
-
-    class Config:
-        from_attributes = True
 
 
 class DashboardStats(BaseModel):

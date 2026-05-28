@@ -1,5 +1,5 @@
 import { Routes, Route, NavLink, Navigate, useLocation } from "react-router-dom";
-import { LayoutDashboard, MapPin, Calendar, Users, UsersRound, Menu, LogOut, ChevronDown, KeyRound } from "lucide-react";
+import { LayoutDashboard, MapPin, Calendar, Users, UsersRound, Menu, LogOut, ChevronDown, KeyRound, Tag } from "lucide-react";
 import { useState } from "react";
 import clsx from "clsx";
 import { AuthProvider, useAuth } from "./AuthContext";
@@ -8,6 +8,7 @@ import Venues from "./pages/Venues";
 import Bookings from "./pages/Bookings";
 import Clients from "./pages/Clients";
 import UsersPage from "./pages/Users";
+import Discounts from "./pages/Discounts";
 import Login from "./pages/Login";
 import ChangePassword from "./pages/ChangePassword";
 
@@ -25,7 +26,7 @@ const ROLE_LABELS = { admin: "Admin", "éditeur": "Éditeur", lecteur: "Lecteur"
 const ROLE_COLORS = { admin: "bg-purple-100 text-purple-700", "éditeur": "bg-blue-100 text-blue-700", lecteur: "bg-gray-100 text-gray-600" };
 
 function Sidebar({ onClose }) {
-  const { user, logout, isAdmin } = useAuth();
+  const { user, logout, isAdmin, canEdit } = useAuth();
   const [profileOpen, setProfileOpen] = useState(false);
 
   const navItems = [
@@ -33,6 +34,7 @@ function Sidebar({ onClose }) {
     { to: "/venues", icon: MapPin, label: "Lieux" },
     { to: "/bookings", icon: Calendar, label: "Réservations" },
     { to: "/clients", icon: Users, label: "Clients" },
+    ...(canEdit ? [{ to: "/discounts", icon: Tag, label: "Remises" }] : []),
     ...(isAdmin ? [{ to: "/users", icon: UsersRound, label: "Utilisateurs" }] : []),
   ];
 
@@ -149,6 +151,7 @@ function AppShell() {
             <Route path="/venues/*" element={<Venues />} />
             <Route path="/bookings/*" element={<Bookings />} />
             <Route path="/clients/*" element={<Clients />} />
+            <Route path="/discounts" element={<Discounts />} />
             <Route path="/change-password" element={<ChangePassword />} />
             <Route path="/users" element={<RequireAdmin><UsersPage /></RequireAdmin>} />
           </Routes>

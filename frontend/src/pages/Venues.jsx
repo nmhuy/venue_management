@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { venuesApi } from "../api";
-import { Plus, Search, MapPin, Users, Euro, Car, Utensils, Bed, Trees, Waves, Music, Pencil, Trash2, X, Check } from "lucide-react";
+import { Plus, Search, MapPin, Users, Euro, Car, Utensils, Bed, Trees, Waves, Music, Pencil, Trash2, X, Check, CalendarDays } from "lucide-react";
 import toast from "react-hot-toast";
 import { useAuth } from "../AuthContext";
 import { useForm } from "react-hook-form";
 import clsx from "clsx";
+import SeasonsModal from "../components/SeasonsModal";
 
 const EVENT_TYPES = ["mariage", "séminaire", "fête", "autre"];
 
@@ -120,7 +121,7 @@ function VenueModal({ venue, onClose }) {
   );
 }
 
-function VenueCard({ venue, onEdit, onDelete, canEdit }) {
+function VenueCard({ venue, onEdit, onDelete, onSeasons, canEdit }) {
   const amenities = amenityConfig.filter(({ key }) => venue[key]);
   const eventTypes = venue.event_types?.split(",").filter(Boolean) ?? [];
 
@@ -132,16 +133,25 @@ function VenueCard({ venue, onEdit, onDelete, canEdit }) {
       <div className="p-5">
         <div className="flex items-start justify-between gap-2">
           <h3 className="font-semibold text-gray-900 text-base leading-tight">{venue.name}</h3>
-          {canEdit && (
-            <div className="flex gap-1 shrink-0">
-              <button onClick={() => onEdit(venue)} className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-500">
-                <Pencil className="w-4 h-4" />
-              </button>
-              <button onClick={() => onDelete(venue)} className="p-1.5 hover:bg-red-50 rounded-lg text-gray-500 hover:text-red-600">
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </div>
-          )}
+          <div className="flex gap-1 shrink-0">
+            <button
+              onClick={() => onSeasons(venue)}
+              className="p-1.5 hover:bg-primary-50 rounded-lg text-gray-400 hover:text-primary-600 transition-colors"
+              title="Tarifs saisonniers"
+            >
+              <CalendarDays className="w-4 h-4" />
+            </button>
+            {canEdit && (
+              <>
+                <button onClick={() => onEdit(venue)} className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-500">
+                  <Pencil className="w-4 h-4" />
+                </button>
+                <button onClick={() => onDelete(venue)} className="p-1.5 hover:bg-red-50 rounded-lg text-gray-500 hover:text-red-600">
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </>
+            )}
+          </div>
         </div>
         <p className="text-sm text-gray-500 flex items-center gap-1 mt-1">
           <MapPin className="w-3.5 h-3.5" />{venue.city}
@@ -174,6 +184,7 @@ function VenueCard({ venue, onEdit, onDelete, canEdit }) {
 
 export default function Venues() {
   const [modal, setModal] = useState(null);
+  const [seasonsVenue, setSeasonsVenue] = useState(null);
   const [search, setSearch] = useState("");
   const qc = useQueryClient();
   const { canEdit } = useAuth();
@@ -233,7 +244,14 @@ export default function Venues() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
           {venues.map((v) => (
-            <VenueCard key={v.id} venue={v} onEdit={(v) => setModal(v)} onDelete={handleDelete} canEdit={canEdit} />
+            <VenueCard
+              key={v.id}
+              venue={v}
+              onEdit={(v) => setModal(v)}
+              onDelete={handleDelete}
+              onSeasons={(v) => setSeasonsVenue(v)}
+              canEdit={canEdit}
+            />
           ))}
         </div>
       )}
@@ -242,6 +260,13 @@ export default function Venues() {
         <VenueModal
           venue={modal === "create" ? null : modal}
           onClose={() => setModal(null)}
+        />
+      )}
+      {seasonsVenue && (
+        <SeasonsModal
+          venue={seasonsVenue}
+          onClose={() => setSeasonsVenue(null)}
+          canEdit={canEdit}
         />
       )}
     </div>
