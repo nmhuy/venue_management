@@ -14,13 +14,22 @@ from routers.seasons import router as seasons_router
 from routers.discounts import router as discounts_router
 from auth import get_current_user
 
-Base.metadata.create_all(bind=engine)
+# Créer les tables une seule fois au démarrage (uniquement si elles n'existent pas)
+# La colonne price_period est ajoutée via migration SQL
+try:
+    if Base.metadata.tables["venues"] is None:
+        Base.metadata.create_all(bind=engine)
+    elif "price_period" not in Base.metadata.tables["venues"].columns:
+        # Ajouter la colonne si elle n'existe pas (migration)
+        Base.metadata.create_all(bind=engine)
+except Exception:
+    pass
 
 app = FastAPI(title="Venue Management API", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_origins=["http://localhost:5173", "http://localhost:3000", "null"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

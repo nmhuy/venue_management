@@ -5,6 +5,23 @@ from sqlalchemy.orm import Session
 from models import Venue, Season, Discount, BookingVenue
 
 
+def _get_price_frequency(period: str) -> tuple[float, str]:
+    """
+    Retourne le nombre de jours facturables et la fréquence d'application du prix.
+
+    - daily : 1 jour, prix journalier
+    - weekly : 7 jours, prix hebdomadaire (divisé par 7 pour le journalier)
+    - weekend : 2 jours/semaine (sam+dim), prix hebdomadaire (divisé par 2)
+    - custom : 1 jour, prix journalier
+    """
+    if period == "weekly":
+        return 7.0, "hebdomadaire"
+    elif period == "weekend":
+        return 2.0, "week-end"
+    else:  # daily, custom
+        return 1.0, "journalier"
+
+
 def _day_in_season(d: date, season: Season) -> bool:
     """Return True if calendar day `d` falls inside `season` (ignores year)."""
     sm, sd = season.start_month, season.start_day
@@ -38,11 +55,15 @@ def compute_venue_price(
     """
     Compute price for one venue over [start_date, end_date).
 
+    Takes into account the price_period (daily, weekly, weekend, custom).
+
     Returns:
         {
             "venue_id": int,
             "venue_name": str,
             "price_per_day": float,
+            "price_period": str,
+            "frequency": str,
             "days": int,
             "lines": [{"label": str, "days": int, "rate": float, "subtotal": float, "multiplier": float}],
             "subtotal": float,
@@ -50,12 +71,16 @@ def compute_venue_price(
             "season_name": str | None,
         }
     """
+    # Get frequency for this venue (handle NULL by defaulting to 'daily')
+    period = venue.price_period or "daily"
+    freq_days, frequency_label = _get_price_frequency(period)
+
     # Collect applicable seasons (venue-specific first, then global)
     seasons = (
         db.query(Season)
         .filter(
             Season.is_active == True,
-            (Season.venue_id == venue.id) | (Season.venue_id == None),  # noqa
+            (Season.venue_id == venue.id) | (Season.venue_id == None),
         )
         .all()
     )
@@ -70,21 +95,27 @@ def compute_venue_price(
         day_buckets[key] = day_buckets.get(key, 0) + 1
         current += timedelta(days=1)
 
+    # For weekly/weekend, convert raw days to booking units (periods)
+    # e.g., 7 days for weekly = 1 booking unit
+    booking_days = {}
+    for season_id, raw_days in day_buckets.items():
+        booking_days[season_id] = raw_days // freq_days if freq_days > 1 else raw_days
+
     season_map = {s.id: s for s in seasons}
     lines = []
     subtotal = 0.0
-    # Dominant season (most days)
-    dominant_key = max(day_buckets, key=lambda k: day_buckets[k])
+    # Dominant season (most booking units)
+    dominant_key = max(booking_days, key=lambda k: booking_days[k]) if booking_days else None
 
-    for season_id, n_days in day_buckets.items():
+    for season_id, n_periods in booking_days.items():
         s = season_map.get(season_id) if season_id else None
         multiplier = s.price_multiplier if s else 1.0
         rate = venue.price_per_day * multiplier
-        line_total = rate * n_days
+        line_total = rate * n_periods
         subtotal += line_total
         lines.append({
             "label": s.name if s else "Tarif standard",
-            "days": n_days,
+            "days": n_periods,
             "rate": rate,
             "multiplier": multiplier,
             "subtotal": line_total,
@@ -96,6 +127,8 @@ def compute_venue_price(
         "venue_id": venue.id,
         "venue_name": venue.name,
         "price_per_day": venue.price_per_day,
+        "price_period": venue.price_period,
+        "frequency": frequency_label,
         "days": days_total,
         "lines": lines,
         "subtotal": round(subtotal, 2),
