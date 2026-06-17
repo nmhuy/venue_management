@@ -6,15 +6,16 @@ from datetime import datetime, timedelta
 import os
 
 from database import engine, get_db, SessionLocal
-from models import Base, Venue, Client, Booking
+from models import Base, Venue, Client, Booking, BookingVenue
 from schemas import DashboardStats
 from routers import venues, clients, bookings
 from routers.auth_router import router as auth_router
+from routers.duration_rules import router as duration_rules_router
 from auth import get_current_user
 
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="Venue Management API", version="1.0.0")
+app = FastAPI(title="Venue Management API", version="2.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -31,6 +32,7 @@ app.include_router(auth_router)
 app.include_router(venues.router)
 app.include_router(clients.router)
 app.include_router(bookings.router)
+app.include_router(duration_rules_router)
 
 
 @app.get("/dashboard", response_model=DashboardStats)
@@ -42,7 +44,11 @@ def get_dashboard(_: object = Depends(get_current_user)):
 
         upcoming = (
             db.query(Booking)
-            .options(joinedload(Booking.venue), joinedload(Booking.client))
+            .options(
+                joinedload(Booking.venue),
+                joinedload(Booking.client),
+                joinedload(Booking.booking_venues).joinedload(BookingVenue.venue),
+            )
             .filter(
                 Booking.start_date >= now,
                 Booking.start_date <= upcoming_limit,

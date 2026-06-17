@@ -1,7 +1,7 @@
 import {
   startOfMonth, endOfMonth, startOfWeek, endOfWeek,
   eachDayOfInterval, isSameMonth, isSameDay, isWithinInterval,
-  addMonths, subMonths, format, isToday,
+  addMonths, subMonths, format, isToday, startOfDay,
 } from "date-fns";
 import { fr } from "date-fns/locale";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -25,10 +25,8 @@ const STATUS_OPACITY = {
 const WEEKDAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
 function bookingOverlapsDay(booking, day) {
-  const start = new Date(booking.start_date);
-  const end = new Date(booking.end_date);
-  // normalise end to end-of-day so a booking ending at midnight still covers the prev day
-  end.setSeconds(end.getSeconds() - 1);
+  const start = startOfDay(new Date(booking.start_date));
+  const end = startOfDay(new Date(booking.end_date));
   return isWithinInterval(day, { start, end });
 }
 

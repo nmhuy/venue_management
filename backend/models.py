@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, Text, Enum, ForeignKey
+from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, Text, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import enum
@@ -22,20 +22,6 @@ class User(Base):
     role = Column(String(50), default="lecteur")
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-
-
-class EventType(str, enum.Enum):
-    mariage = "mariage"
-    seminaire = "séminaire"
-    fete = "fête"
-    autre = "autre"
-
-
-class BookingStatus(str, enum.Enum):
-    en_attente = "en_attente"
-    confirme = "confirmé"
-    annule = "annulé"
-    termine = "terminé"
 
 
 class Venue(Base):
@@ -63,6 +49,7 @@ class Venue(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     bookings = relationship("Booking", back_populates="venue")
+    duration_rules = relationship("DurationPricingRule", back_populates="venue")
 
 
 class Client(Base):
@@ -84,7 +71,8 @@ class Booking(Base):
     __tablename__ = "bookings"
 
     id = Column(Integer, primary_key=True, index=True)
-    venue_id = Column(Integer, ForeignKey("venues.id"), nullable=False)
+    # venue_id kept for backward compat — always set to first venue in venue_ids
+    venue_id = Column(Integer, ForeignKey("venues.id"), nullable=True)
     client_id = Column(Integer, ForeignKey("clients.id"), nullable=False)
     event_type = Column(String(50), nullable=False)
     event_name = Column(String(200))
@@ -92,6 +80,10 @@ class Booking(Base):
     end_date = Column(DateTime, nullable=False)
     guest_count = Column(Integer, nullable=False)
     status = Column(String(50), default="en_attente")
+    # Pricing breakdown stored at booking time
+    base_price = Column(Float)           # sum of venue subtotals before duration discount
+    duration_multiplier = Column(Float, default=1.0)
+    duration_rule_name = Column(String(100))
     total_price = Column(Float)
     deposit_paid = Column(Boolean, default=False)
     deposit_amount = Column(Float, default=0)
@@ -101,3 +93,37 @@ class Booking(Base):
 
     venue = relationship("Venue", back_populates="bookings")
     client = relationship("Client", back_populates="bookings")
+    booking_venues = relationship(
+        "BookingVenue", back_populates="booking", cascade="all, delete-orphan"
+    )
+
+
+class BookingVenue(Base):
+    """Pivot: one row per (booking, venue) pair. Stores a price snapshot."""
+    __tablename__ = "booking_venues"
+
+    id = Column(Integer, primary_key=True, index=True)
+    booking_id = Column(Integer, ForeignKey("bookings.id", ondelete="CASCADE"), nullable=False)
+    venue_id = Column(Integer, ForeignKey("venues.id"), nullable=False)
+    price_per_day = Column(Float, nullable=False)
+    days = Column(Integer, nullable=False)
+    subtotal = Column(Float, nullable=False)  # price_per_day * days
+
+    booking = relationship("Booking", back_populates="booking_venues")
+    venue = relationship("Venue")
+
+
+class DurationPricingRule(Base):
+    """Price multiplier that applies when a booking lasts a given number of days.
+    venue_id=NULL means the rule applies globally to all venues."""
+    __tablename__ = "duration_pricing_rules"
+
+    id = Column(Integer, primary_key=True, index=True)
+    venue_id = Column(Integer, ForeignKey("venues.id"), nullable=True)
+    name = Column(String(100), nullable=False)
+    min_days = Column(Integer, nullable=False)
+    max_days = Column(Integer, nullable=True)  # NULL = no upper bound
+    price_multiplier = Column(Float, nullable=False, default=1.0)
+    is_active = Column(Boolean, default=True)
+
+    venue = relationship("Venue", back_populates="duration_rules")

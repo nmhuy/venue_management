@@ -54,4 +54,15 @@ export const dashboardApi = {
   get: () => api.get("/dashboard").then((r) => r.data),
 };
 
+export const pricingApi = {
+  preview: (data) => api.post("/bookings/price-preview", data).then((r) => r.data),
+};
+
+export const durationRulesApi = {
+  list: (params) => api.get("/duration-rules/", { params }).then((r) => r.data),
+  create: (data) => api.post("/duration-rules/", data).then((r) => r.data),
+  update: (id, data) => api.put(`/duration-rules/${id}`, data).then((r) => r.data),
+  delete: (id) => api.delete(`/duration-rules/${id}`),
+};
+
 export { api };

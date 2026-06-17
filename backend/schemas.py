@@ -1,7 +1,9 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
 
+
+# ── Venue ──────────────────────────────────────────────────────────────────────
 
 class VenueBase(BaseModel):
     name: str
@@ -55,6 +57,8 @@ class VenueOut(VenueBase):
         from_attributes = True
 
 
+# ── Client ─────────────────────────────────────────────────────────────────────
+
 class ClientBase(BaseModel):
     first_name: str
     last_name: str
@@ -85,8 +89,52 @@ class ClientOut(ClientBase):
         from_attributes = True
 
 
-class BookingBase(BaseModel):
+# ── Duration pricing rules ──────────────────────────────────────────────────────
+
+class DurationRuleBase(BaseModel):
+    venue_id: Optional[int] = None  # null = global
+    name: str
+    min_days: int
+    max_days: Optional[int] = None
+    price_multiplier: float
+    is_active: bool = True
+
+
+class DurationRuleCreate(DurationRuleBase):
+    pass
+
+
+class DurationRuleUpdate(BaseModel):
+    name: Optional[str] = None
+    min_days: Optional[int] = None
+    max_days: Optional[int] = None
+    price_multiplier: Optional[float] = None
+    is_active: Optional[bool] = None
+
+
+class DurationRuleOut(DurationRuleBase):
+    id: int
+
+    class Config:
+        from_attributes = True
+
+
+# ── Booking ────────────────────────────────────────────────────────────────────
+
+class BookingVenueOut(BaseModel):
+    id: int
     venue_id: int
+    venue: Optional[VenueOut] = None
+    price_per_day: float
+    days: int
+    subtotal: float
+
+    class Config:
+        from_attributes = True
+
+
+class BookingCreate(BaseModel):
+    venue_ids: List[int]   # one or more venues
     client_id: int
     event_type: str
     event_name: Optional[str] = None
@@ -94,39 +142,61 @@ class BookingBase(BaseModel):
     end_date: datetime
     guest_count: int
     status: str = "en_attente"
-    total_price: Optional[float] = None
     deposit_paid: bool = False
     deposit_amount: float = 0
     notes: Optional[str] = None
 
 
-class BookingCreate(BookingBase):
-    pass
-
-
 class BookingUpdate(BaseModel):
+    venue_ids: Optional[List[int]] = None
+    client_id: Optional[int] = None
     event_type: Optional[str] = None
     event_name: Optional[str] = None
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
     guest_count: Optional[int] = None
     status: Optional[str] = None
-    total_price: Optional[float] = None
     deposit_paid: Optional[bool] = None
     deposit_amount: Optional[float] = None
     notes: Optional[str] = None
 
 
-class BookingOut(BookingBase):
+class BookingOut(BaseModel):
     id: int
+    venue_id: Optional[int] = None
+    client_id: int
+    event_type: str
+    event_name: Optional[str] = None
+    start_date: datetime
+    end_date: datetime
+    guest_count: int
+    status: str
+    base_price: Optional[float] = None
+    duration_multiplier: Optional[float] = None
+    duration_rule_name: Optional[str] = None
+    total_price: Optional[float] = None
+    deposit_paid: bool = False
+    deposit_amount: float = 0
+    notes: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
     venue: Optional[VenueOut] = None
     client: Optional[ClientOut] = None
+    booking_venues: List[BookingVenueOut] = []
 
     class Config:
         from_attributes = True
 
+
+# ── Price preview ───────────────────────────────────────────────────────────────
+
+class PricePreviewIn(BaseModel):
+    venue_ids: List[int]
+    start_date: datetime
+    end_date: datetime
+
+
+# ── Dashboard ───────────────────────────────────────────────────────────────────
 
 class DashboardStats(BaseModel):
     total_venues: int
