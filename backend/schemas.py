@@ -13,6 +13,7 @@ class VenueBase(BaseModel):
     capacity_min: int = 1
     capacity_max: int
     price_per_day: float
+    price_period: Optional[str] = "daily"
     surface_m2: Optional[float] = None
     has_parking: bool = False
     has_catering: bool = False
@@ -36,6 +37,7 @@ class VenueUpdate(BaseModel):
     capacity_min: Optional[int] = None
     capacity_max: Optional[int] = None
     price_per_day: Optional[float] = None
+    price_period: Optional[str] = None
     surface_m2: Optional[float] = None
     has_parking: Optional[bool] = None
     has_catering: Optional[bool] = None
@@ -92,7 +94,7 @@ class ClientOut(ClientBase):
 # ── Duration pricing rules ──────────────────────────────────────────────────────
 
 class DurationRuleBase(BaseModel):
-    venue_id: Optional[int] = None  # null = global
+    venue_id: Optional[int] = None
     name: str
     min_days: int
     max_days: Optional[int] = None
@@ -119,6 +121,92 @@ class DurationRuleOut(DurationRuleBase):
         from_attributes = True
 
 
+# ── Seasons ─────────────────────────────────────────────────────────────────────
+
+class SeasonBase(BaseModel):
+    venue_id: Optional[int] = None
+    name: str
+    color: str = "#6366f1"
+    start_month: int
+    start_day: int
+    end_month: int
+    end_day: int
+    price_multiplier: float = 1.0
+    is_active: bool = True
+
+
+class SeasonCreate(SeasonBase):
+    pass
+
+
+class SeasonUpdate(BaseModel):
+    name: Optional[str] = None
+    color: Optional[str] = None
+    start_month: Optional[int] = None
+    start_day: Optional[int] = None
+    end_month: Optional[int] = None
+    end_day: Optional[int] = None
+    price_multiplier: Optional[float] = None
+    is_active: Optional[bool] = None
+
+
+class SeasonOut(SeasonBase):
+    id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# ── Discounts ───────────────────────────────────────────────────────────────────
+
+class DiscountBase(BaseModel):
+    name: str
+    code: str
+    discount_type: str  # "percentage" | "fixed"
+    value: float
+    min_booking_amount: float = 0
+    max_uses: Optional[int] = None
+    description: Optional[str] = None
+    is_active: bool = True
+    expires_at: Optional[datetime] = None
+
+
+class DiscountCreate(DiscountBase):
+    pass
+
+
+class DiscountUpdate(BaseModel):
+    name: Optional[str] = None
+    discount_type: Optional[str] = None
+    value: Optional[float] = None
+    min_booking_amount: Optional[float] = None
+    max_uses: Optional[int] = None
+    description: Optional[str] = None
+    is_active: Optional[bool] = None
+    expires_at: Optional[datetime] = None
+
+
+class DiscountShortOut(BaseModel):
+    id: int
+    name: str
+    code: str
+    discount_type: str
+    value: float
+
+    class Config:
+        from_attributes = True
+
+
+class DiscountOut(DiscountBase):
+    id: int
+    current_uses: int = 0
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 # ── Booking ────────────────────────────────────────────────────────────────────
 
 class BookingVenueOut(BaseModel):
@@ -127,6 +215,8 @@ class BookingVenueOut(BaseModel):
     venue: Optional[VenueOut] = None
     price_per_day: float
     days: int
+    seasonal_multiplier: float = 1.0
+    season_name: Optional[str] = None
     subtotal: float
 
     class Config:
@@ -134,7 +224,7 @@ class BookingVenueOut(BaseModel):
 
 
 class BookingCreate(BaseModel):
-    venue_ids: List[int]   # one or more venues
+    venue_ids: List[int]
     client_id: int
     event_type: str
     event_name: Optional[str] = None
@@ -142,6 +232,7 @@ class BookingCreate(BaseModel):
     end_date: datetime
     guest_count: int
     status: str = "en_attente"
+    discount_code: Optional[str] = None
     deposit_paid: bool = False
     deposit_amount: float = 0
     notes: Optional[str] = None
@@ -156,6 +247,7 @@ class BookingUpdate(BaseModel):
     end_date: Optional[datetime] = None
     guest_count: Optional[int] = None
     status: Optional[str] = None
+    discount_code: Optional[str] = None
     deposit_paid: Optional[bool] = None
     deposit_amount: Optional[float] = None
     notes: Optional[str] = None
@@ -174,6 +266,8 @@ class BookingOut(BaseModel):
     base_price: Optional[float] = None
     duration_multiplier: Optional[float] = None
     duration_rule_name: Optional[str] = None
+    discount_id: Optional[int] = None
+    discount_amount: float = 0
     total_price: Optional[float] = None
     deposit_paid: bool = False
     deposit_amount: float = 0
@@ -182,6 +276,7 @@ class BookingOut(BaseModel):
     updated_at: Optional[datetime] = None
     venue: Optional[VenueOut] = None
     client: Optional[ClientOut] = None
+    discount: Optional[DiscountShortOut] = None
     booking_venues: List[BookingVenueOut] = []
 
     class Config:
@@ -194,6 +289,7 @@ class PricePreviewIn(BaseModel):
     venue_ids: List[int]
     start_date: datetime
     end_date: datetime
+    discount_code: Optional[str] = None
 
 
 # ── Dashboard ───────────────────────────────────────────────────────────────────

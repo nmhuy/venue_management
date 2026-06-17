@@ -4,7 +4,7 @@ from typing import List, Optional
 from datetime import datetime
 from auth import get_current_user, require_editor
 from database import get_db
-from models import Booking, BookingVenue, Venue
+from models import Booking, BookingVenue, Venue, Discount
 from schemas import BookingCreate, BookingUpdate, BookingOut, PricePreviewIn
 from pricing import build_price_preview, find_duration_rule
 
@@ -17,6 +17,7 @@ def _load_booking(booking_id: int, db: Session) -> Booking:
         .options(
             joinedload(Booking.venue),
             joinedload(Booking.client),
+            joinedload(Booking.discount),
             joinedload(Booking.booking_venues).joinedload(BookingVenue.venue),
         )
         .filter(Booking.id == booking_id)
@@ -38,7 +39,6 @@ def _check_conflicts(venue_id: int, start: datetime, end: datetime, db: Session,
     )
     if exclude_id:
         q = q.filter(Booking.id != exclude_id)
-    # Also check via booking_venues for multi-venue bookings
     from models import BookingVenue as BV
     q2 = (
         db.query(Booking)
@@ -65,7 +65,10 @@ def price_preview(
         raise HTTPException(status_code=400, detail="La date de fin doit être après la date de début")
     if not data.venue_ids:
         raise HTTPException(status_code=400, detail="Sélectionnez au moins un lieu")
-    return build_price_preview(data.venue_ids, data.start_date, data.end_date, db)
+    return build_price_preview(
+        data.venue_ids, data.start_date, data.end_date, db,
+        discount_code=data.discount_code,
+    )
 
 
 @router.get("/", response_model=List[BookingOut])
@@ -86,6 +89,7 @@ def list_bookings(
         .options(
             joinedload(Booking.venue),
             joinedload(Booking.client),
+            joinedload(Booking.discount),
             joinedload(Booking.booking_venues).joinedload(BookingVenue.venue),
         )
     )
@@ -120,7 +124,6 @@ def create_booking(
     if not booking.venue_ids:
         raise HTTPException(status_code=400, detail="Sélectionnez au moins un lieu")
 
-    # Verify all venues exist and check conflicts
     for vid in booking.venue_ids:
         if not db.query(Venue).filter(Venue.id == vid, Venue.is_active == True).first():
             raise HTTPException(status_code=404, detail=f"Lieu {vid} non trouvé")
@@ -131,8 +134,17 @@ def create_booking(
                 detail=f"Le lieu « {venue.name} » est déjà réservé sur cette période",
             )
 
-    # Compute price
-    preview = build_price_preview(booking.venue_ids, booking.start_date, booking.end_date, db)
+    preview = build_price_preview(
+        booking.venue_ids, booking.start_date, booking.end_date, db,
+        discount_code=booking.discount_code,
+    )
+
+    # Resolve discount FK
+    discount_obj = None
+    if booking.discount_code and preview.get("discount", {}).get("id"):
+        discount_obj = db.query(Discount).get(preview["discount"]["id"])
+
+    duration_disc = preview.get("duration_discount")
 
     db_booking = Booking(
         venue_id=booking.venue_ids[0],
@@ -144,8 +156,10 @@ def create_booking(
         guest_count=booking.guest_count,
         status=booking.status,
         base_price=preview["base_price"],
-        duration_multiplier=preview["duration_discount"]["multiplier"] if preview["duration_discount"] else 1.0,
-        duration_rule_name=preview["duration_discount"]["name"] if preview["duration_discount"] else None,
+        duration_multiplier=duration_disc["multiplier"] if duration_disc else 1.0,
+        duration_rule_name=duration_disc["name"] if duration_disc else None,
+        discount_id=discount_obj.id if discount_obj else None,
+        discount_amount=preview["discount"]["amount"] if preview.get("discount") else 0,
         total_price=preview["total_price"],
         deposit_paid=booking.deposit_paid,
         deposit_amount=booking.deposit_amount,
@@ -154,15 +168,19 @@ def create_booking(
     db.add(db_booking)
     db.flush()
 
-    # Create BookingVenue rows
     for v in preview["venues"]:
         db.add(BookingVenue(
             booking_id=db_booking.id,
             venue_id=v["venue_id"],
             price_per_day=v["price_per_day"],
             days=v["days"],
+            seasonal_multiplier=v.get("seasonal_multiplier", 1.0),
+            season_name=v.get("season_name"),
             subtotal=v["subtotal"],
         ))
+
+    if discount_obj:
+        discount_obj.current_uses += 1
 
     db.commit()
     return _load_booking(db_booking.id, db)
@@ -181,17 +199,16 @@ def update_booking(
 
     data = booking.model_dump(exclude_unset=True)
     venue_ids = data.pop("venue_ids", None)
+    discount_code = data.pop("discount_code", None)
 
-    # If venues or dates changed, recompute price
     start = data.get("start_date", db_booking.start_date)
     end = data.get("end_date", db_booking.end_date)
     ids = venue_ids or [bv.venue_id for bv in db_booking.booking_venues] or [db_booking.venue_id]
 
-    if venue_ids or "start_date" in data or "end_date" in data:
+    if venue_ids or "start_date" in data or "end_date" in data or discount_code is not None:
         if end <= start:
             raise HTTPException(status_code=400, detail="La date de fin doit être après la date de début")
 
-        # Conflict check
         for vid in ids:
             if _check_conflicts(vid, start, end, db, exclude_id=booking_id):
                 venue = db.query(Venue).get(vid)
@@ -200,14 +217,22 @@ def update_booking(
                     detail=f"Le lieu « {venue.name} » est déjà réservé sur cette période",
                 )
 
-        preview = build_price_preview(ids, start, end, db)
+        preview = build_price_preview(ids, start, end, db, discount_code=discount_code)
+
+        discount_obj = None
+        if discount_code and preview.get("discount", {}).get("id"):
+            discount_obj = db.query(Discount).get(preview["discount"]["id"])
+
+        duration_disc = preview.get("duration_discount")
+
         data["venue_id"] = ids[0]
         data["base_price"] = preview["base_price"]
-        data["duration_multiplier"] = preview["duration_discount"]["multiplier"] if preview["duration_discount"] else 1.0
-        data["duration_rule_name"] = preview["duration_discount"]["name"] if preview["duration_discount"] else None
+        data["duration_multiplier"] = duration_disc["multiplier"] if duration_disc else 1.0
+        data["duration_rule_name"] = duration_disc["name"] if duration_disc else None
+        data["discount_id"] = discount_obj.id if discount_obj else None
+        data["discount_amount"] = preview["discount"]["amount"] if preview.get("discount") else 0
         data["total_price"] = preview["total_price"]
 
-        # Replace BookingVenue rows
         db.query(BookingVenue).filter(BookingVenue.booking_id == booking_id).delete()
         for v in preview["venues"]:
             db.add(BookingVenue(
@@ -215,8 +240,13 @@ def update_booking(
                 venue_id=v["venue_id"],
                 price_per_day=v["price_per_day"],
                 days=v["days"],
+                seasonal_multiplier=v.get("seasonal_multiplier", 1.0),
+                season_name=v.get("season_name"),
                 subtotal=v["subtotal"],
             ))
+
+        if discount_obj:
+            discount_obj.current_uses += 1
 
     for field, value in data.items():
         setattr(db_booking, field, value)

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { bookingsApi, venuesApi, clientsApi, pricingApi } from "../api";
-import { Plus, Calendar, List, X, Clock, CheckCircle, Ban, Pencil, Timer } from "lucide-react";
+import { Plus, Calendar, List, X, Clock, CheckCircle, Ban, Pencil, Timer, Tag } from "lucide-react";
 import { useAuth } from "../AuthContext";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -42,7 +42,6 @@ function BookingModal({ booking, onClose }) {
     queryFn: () => clientsApi.list({}),
   });
 
-  // Multi-venue selection (pre-populate from existing booking)
   const [selectedVenueIds, setSelectedVenueIds] = useState(() => {
     if (booking?.booking_venues?.length) return booking.booking_venues.map((bv) => bv.venue_id);
     if (booking?.venue_id) return [booking.venue_id];
@@ -54,7 +53,7 @@ function BookingModal({ booking, onClose }) {
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
 
-  // Live price preview
+  const [discountCode, setDiscountCode] = useState(booking?.discount?.code ?? "");
   const [preview, setPreview] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
 
@@ -87,6 +86,7 @@ function BookingModal({ booking, onClose }) {
           venue_ids: selectedVenueIds,
           start_date: startDate,
           end_date: endDate,
+          discount_code: discountCode || undefined,
         });
         setPreview(result);
       } catch {
@@ -96,7 +96,7 @@ function BookingModal({ booking, onClose }) {
       }
     }, 500);
     return () => clearTimeout(timer);
-  }, [selectedVenueIds, startDate, endDate]);
+  }, [selectedVenueIds, startDate, endDate, discountCode]);
 
   const mutation = useMutation({
     mutationFn: (data) => {
@@ -112,6 +112,7 @@ function BookingModal({ booking, onClose }) {
         deposit_amount: parseFloat(data.deposit_amount) || 0,
         deposit_paid: data.deposit_paid,
         notes: data.notes,
+        discount_code: discountCode || undefined,
       };
       return isEdit ? bookingsApi.update(booking.id, payload) : bookingsApi.create(payload);
     },
@@ -211,6 +212,29 @@ function BookingModal({ booking, onClose }) {
                 ))}
               </select>
             </div>
+          </div>
+
+          {/* Discount code */}
+          <div>
+            <label className="label">Code promo</label>
+            <div className="relative">
+              <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                className="input pl-9 uppercase tracking-wider"
+                value={discountCode}
+                onChange={(e) => setDiscountCode(e.target.value.toUpperCase())}
+                placeholder="EARLY20"
+              />
+            </div>
+            {preview?.discount?.error && (
+              <p className="text-xs text-red-500 mt-1">{preview.discount.error}</p>
+            )}
+            {preview?.discount?.amount > 0 && (
+              <p className="text-xs text-green-600 mt-1">
+                ✓ Code valide · remise de{" "}
+                {preview.discount.amount.toLocaleString("fr-FR", { style: "currency", currency: "EUR" })}
+              </p>
+            )}
           </div>
 
           {/* Live price preview */}
@@ -348,11 +372,11 @@ export default function Bookings() {
           {bookings.map((b) => {
             const status = statusConfig[b.status] ?? statusConfig.en_attente;
             const StatusIcon = status.icon;
-            // Build display name from booking_venues (multi-venue) or fallback to venue
             const venueNames =
               b.booking_venues?.length > 0
                 ? b.booking_venues.map((bv) => bv.venue?.name).filter(Boolean).join(" + ")
                 : b.venue?.name ?? "–";
+            const hasDiscount = b.base_price && b.total_price && b.base_price !== b.total_price;
 
             return (
               <div
@@ -376,6 +400,11 @@ export default function Bookings() {
                         <Timer className="w-3 h-3" />{b.duration_rule_name}
                       </span>
                     )}
+                    {b.discount && (
+                      <span className="badge bg-green-50 text-green-700 text-xs flex items-center gap-1">
+                        <Tag className="w-3 h-3" />{b.discount.code}
+                      </span>
+                    )}
                   </div>
                   <p className="text-sm text-gray-600 mt-1">
                     {venueNames} · {b.client?.first_name} {b.client?.last_name} · {b.guest_count} invités
@@ -386,7 +415,7 @@ export default function Bookings() {
                   </p>
                 </div>
                 <div className="text-right shrink-0">
-                  {b.duration_rule_name && b.base_price && b.base_price !== b.total_price && (
+                  {hasDiscount && (
                     <p className="text-xs text-gray-400 line-through">
                       {b.base_price.toLocaleString("fr-FR", { style: "currency", currency: "EUR" })}
                     </p>
@@ -394,7 +423,9 @@ export default function Bookings() {
                   <p className="font-semibold text-gray-900">
                     {b.total_price?.toLocaleString("fr-FR", { style: "currency", currency: "EUR" })}
                   </p>
-                  {b.deposit_paid && <p className="text-xs text-green-600">Acompte versé</p>}
+                  {b.deposit_paid && (
+                    <p className="text-xs text-green-600">Acompte versé</p>
+                  )}
                 </div>
                 {canEdit && (
                   <div className="flex gap-1 shrink-0">

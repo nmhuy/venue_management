@@ -11,6 +11,8 @@ from schemas import DashboardStats
 from routers import venues, clients, bookings
 from routers.auth_router import router as auth_router
 from routers.duration_rules import router as duration_rules_router
+from routers.seasons import router as seasons_router
+from routers.discounts import router as discounts_router
 from auth import get_current_user
 
 Base.metadata.create_all(bind=engine)
@@ -19,7 +21,7 @@ app = FastAPI(title="Venue Management API", version="2.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_origins=["http://localhost:5173", "http://localhost:3000", "null"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -33,6 +35,8 @@ app.include_router(venues.router)
 app.include_router(clients.router)
 app.include_router(bookings.router)
 app.include_router(duration_rules_router)
+app.include_router(seasons_router)
+app.include_router(discounts_router)
 
 
 @app.get("/dashboard", response_model=DashboardStats)
@@ -47,6 +51,7 @@ def get_dashboard(_: object = Depends(get_current_user)):
             .options(
                 joinedload(Booking.venue),
                 joinedload(Booking.client),
+                joinedload(Booking.discount),
                 joinedload(Booking.booking_venues).joinedload(BookingVenue.venue),
             )
             .filter(

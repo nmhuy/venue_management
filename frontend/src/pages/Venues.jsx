@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { venuesApi } from "../api";
-import { Plus, Search, MapPin, Users, Euro, Car, Utensils, Bed, Trees, Waves, Music, Pencil, Trash2, X, Timer } from "lucide-react";
+import { Plus, Search, MapPin, Users, Euro, Car, Utensils, Bed, Trees, Waves, Music, Pencil, Trash2, X, Timer, CalendarDays } from "lucide-react";
 import toast from "react-hot-toast";
 import { useAuth } from "../AuthContext";
 import { useForm } from "react-hook-form";
 import clsx from "clsx";
 import DurationRulesModal from "../components/DurationRulesModal";
+import SeasonsModal from "../components/SeasonsModal";
 
 const EVENT_TYPES = ["mariage", "séminaire", "fête", "autre"];
 
@@ -121,7 +122,7 @@ function VenueModal({ venue, onClose }) {
   );
 }
 
-function VenueCard({ venue, onEdit, onDelete, onDurationRules, canEdit }) {
+function VenueCard({ venue, onEdit, onDelete, onDurationRules, onSeasons, canEdit }) {
   const amenities = amenityConfig.filter(({ key }) => venue[key]);
   const eventTypes = venue.event_types?.split(",").filter(Boolean) ?? [];
 
@@ -140,6 +141,13 @@ function VenueCard({ venue, onEdit, onDelete, onDurationRules, canEdit }) {
               title="Tarification par durée"
             >
               <Timer className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => onSeasons(venue)}
+              className="p-1.5 hover:bg-primary-50 rounded-lg text-gray-400 hover:text-primary-600 transition-colors"
+              title="Tarifs saisonniers"
+            >
+              <CalendarDays className="w-4 h-4" />
             </button>
             {canEdit && (
               <>
@@ -185,6 +193,7 @@ function VenueCard({ venue, onEdit, onDelete, onDurationRules, canEdit }) {
 export default function Venues() {
   const [modal, setModal] = useState(null);
   const [durationVenue, setDurationVenue] = useState(null);
+  const [seasonsVenue, setSeasonsVenue] = useState(null);
   const [search, setSearch] = useState("");
   const qc = useQueryClient();
   const { canEdit } = useAuth();
@@ -250,6 +259,7 @@ export default function Venues() {
               onEdit={(v) => setModal(v)}
               onDelete={handleDelete}
               onDurationRules={(v) => setDurationVenue(v)}
+              onSeasons={(v) => setSeasonsVenue(v)}
               canEdit={canEdit}
             />
           ))}
@@ -266,6 +276,13 @@ export default function Venues() {
         <DurationRulesModal
           venue={durationVenue}
           onClose={() => setDurationVenue(null)}
+          canEdit={canEdit}
+        />
+      )}
+      {seasonsVenue && (
+        <SeasonsModal
+          venue={seasonsVenue}
+          onClose={() => setSeasonsVenue(null)}
           canEdit={canEdit}
         />
       )}

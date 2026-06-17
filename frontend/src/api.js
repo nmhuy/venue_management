@@ -4,14 +4,12 @@ const TOKEN_KEY = "vm_token";
 
 const api = axios.create({ baseURL: "/api" });
 
-// Attach token to every request on this instance
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem(TOKEN_KEY);
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
-// On 401 clear storage and redirect to login
 api.interceptors.response.use(
   (res) => res,
   (err) => {
@@ -52,6 +50,22 @@ export const bookingsApi = {
 
 export const dashboardApi = {
   get: () => api.get("/dashboard").then((r) => r.data),
+};
+
+export const seasonsApi = {
+  list: (params) => api.get("/seasons/", { params }).then((r) => r.data),
+  create: (data) => api.post("/seasons/", data).then((r) => r.data),
+  update: (id, data) => api.put(`/seasons/${id}`, data).then((r) => r.data),
+  delete: (id) => api.delete(`/seasons/${id}`),
+};
+
+export const discountsApi = {
+  list: () => api.get("/discounts/").then((r) => r.data),
+  create: (data) => api.post("/discounts/", data).then((r) => r.data),
+  update: (id, data) => api.put(`/discounts/${id}`, data).then((r) => r.data),
+  delete: (id) => api.delete(`/discounts/${id}`),
+  validate: (code, amount) =>
+    api.get(`/discounts/validate/${code}`, { params: { base_amount: amount } }).then((r) => r.data),
 };
 
 export const pricingApi = {
